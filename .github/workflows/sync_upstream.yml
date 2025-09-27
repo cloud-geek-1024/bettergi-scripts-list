@@ -11,8 +11,7 @@ on:
 
 jobs:
   sync:
-    # 仅当仓库所有者不是 'babalae' 且 secrets.USER_EMAIL 存在时运行 保证为下游仓库
-    if: github.repository_owner != 'babalae'
+    if: github.repository_owner == 'babalae'
     runs-on: ubuntu-latest
     name: Sync latest commits from upstream repo
 
@@ -28,10 +27,14 @@ jobs:
 
       - name: 设置输入值
         run: |
-          UPSTREAM_REPO='https://github.com/babalae/bettergi-scripts-list.git'
+          UPSTREAM_REPOSITORY='babalae/bettergi-scripts-list'
+          UPSTREAM_REPO='https://github.com/${UPSTREAM_REPOSITORY}.git'
           USER_NAME='${{github.repository_owner||github.actor}}'
           USER_EMAIL='${{secrets.USER_EMAIL}}'
+          USER_REPOSITORY='${{github.repository}}'
           
+          echo "USER_REPOSITORY=$USER_REPOSITORY" >> $GITHUB_ENV
+          echo "UPSTREAM_REPOSITORY=$UPSTREAM_REPOSITORY" >> $GITHUB_ENV
           echo "UPSTREAM_REPO=$UPSTREAM_REPO" >> $GITHUB_ENV
           echo "USER_NAME=$USER_NAME" >> $GITHUB_ENV
           echo "USER_EMAIL=$USER_EMAIL" >> $GITHUB_ENV
@@ -41,7 +44,10 @@ jobs:
 
       # Step 2: 使用 Action 同步上游变更
       - name: Sync upstream changes
+        # 非上流仓库开启同步
+        if: env.USER_REPOSITORY != env.UPSTREAM_REPOSITORY
         id: sync
+        # 使用 Fork-Sync-With-Upstream-action 同步上游仓库的变更
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
         with:
           # 上游仓库 URL（必填）
