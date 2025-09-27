@@ -28,14 +28,16 @@ jobs:
       - name: 设置输入值
         run: |
           UPSTREAM_REPOSITORY='babalae/bettergi-scripts-list'
-          UPSTREAM_REPO='https://github.com/$UPSTREAM_REPOSITORY.git'
+          echo "UPSTREAM_REPOSITORY=$UPSTREAM_REPOSITORY" >> $GITHUB_ENV
+        
+          UPSTREAM_REPO='https://github.com/${{env.UPSTREAM_REPOSITORY}}.git'
+          echo "UPSTREAM_REPO=$UPSTREAM_REPO" >> $GITHUB_ENV
+          
           USER_NAME='${{github.repository_owner||github.actor}}'
           USER_EMAIL='${{secrets.USER_EMAIL}}'
           USER_REPOSITORY='${{github.repository}}'
           
           echo "USER_REPOSITORY=$USER_REPOSITORY" >> $GITHUB_ENV
-          echo "UPSTREAM_REPOSITORY=$UPSTREAM_REPOSITORY" >> $GITHUB_ENV
-          echo "UPSTREAM_REPO=$UPSTREAM_REPO" >> $GITHUB_ENV
           echo "USER_NAME=$USER_NAME" >> $GITHUB_ENV
           echo "USER_EMAIL=$USER_EMAIL" >> $GITHUB_ENV
           
