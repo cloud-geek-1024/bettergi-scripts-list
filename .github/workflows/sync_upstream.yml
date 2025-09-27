@@ -57,16 +57,13 @@ jobs:
           # 你的 Fork 分支（必填）
           upstream_sync_branch: main
           # 上游仓库（必填，例如 https://github.com/actions/starter-workflows.git）
-          upstream_repo: ${{env.UPSTREAM_REPO}}
+          upstream_sync_repo: ${{env.UPSTREAM_REPOSITORY}}
           # 上游分支（必填）
           upstream_branch: main
-
           # 可选：测试模式（手动运行时启用，模拟同步而不实际提交）
           sync_test_mode: false
-
           # 可选：如果上游是私有仓库，需要 PAT Token（否则用默认 GITHUB_TOKEN）
           # upstream_repo_access_token: ${{ secrets.UPSTREAM_PAT }}
-
           # 必填：用于推送变更到你的 Fork（默认 GITHUB_TOKEN 即可）
           target_repo_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -78,7 +75,7 @@ jobs:
           user_email: ${{env.USER_EMAIL}}
 
           # 可选：提交消息前缀
-          commit_message_prefix: "chore: "
+          commit_message_prefix: "PR: "
 
           # 可选：如果有冲突，是否创建 PR 而非直接合并（推荐 true）
           create_pr_if_conflict: true
