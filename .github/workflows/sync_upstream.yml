@@ -28,7 +28,7 @@ jobs:
       - name: 设置输入值
         run: |
           UPSTREAM_REPOSITORY='babalae/bettergi-scripts-list'
-          UPSTREAM_REPO='https://github.com/${UPSTREAM_REPOSITORY}.git'
+          UPSTREAM_REPO='https://github.com/$UPSTREAM_REPOSITORY.git'
           USER_NAME='${{github.repository_owner||github.actor}}'
           USER_EMAIL='${{secrets.USER_EMAIL}}'
           USER_REPOSITORY='${{github.repository}}'
