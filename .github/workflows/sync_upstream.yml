@@ -30,7 +30,7 @@ jobs:
           UPSTREAM_REPOSITORY='babalae/bettergi-scripts-list'
           echo "UPSTREAM_REPOSITORY=$UPSTREAM_REPOSITORY" >> $GITHUB_ENV
         
-          UPSTREAM_REPO="https://github.com/$UPSTREAM_REPOSITORY.git"
+          UPSTREAM_REPO="https://github.com/${{env.UPSTREAM_REPOSITORY}}.git"
           echo "UPSTREAM_REPO=$UPSTREAM_REPO" >> $GITHUB_ENV
           
           USER_NAME='${{github.repository_owner||github.actor}}'
