@@ -11,7 +11,7 @@ on:
 
 jobs:
   sync:
-    if: github.repository_owner == 'babalae'
+    #if: github.repository_owner == 'babalae'
     runs-on: ubuntu-latest
     name: Sync latest commits from upstream repo
 
