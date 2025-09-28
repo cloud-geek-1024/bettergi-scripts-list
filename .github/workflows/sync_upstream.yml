@@ -1,6 +1,8 @@
 name: Sync Upstream
 
 on:
+  #  schedule:
+  #    - cron: '0 8,16 * * *'  # 每天 UTC 8:00 和 16:00
   workflow_dispatch:
     inputs:
       target_branch:
@@ -99,6 +101,9 @@ jobs:
           git rebase upstream/main
           if [ $? -ne 0 ]; then
             echo "Rebase 失败，可能有冲突，将创建 PR 解决。"
+            CONFLICT_FILES=$(git diff --name-only --diff-filter=U || echo "无法获取冲突文件")
+            echo "冲突文件: $CONFLICT_FILES"
+            echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
             git rebase --abort
             echo "rebase_failed=true" >> $GITHUB_OUTPUT
           else
@@ -123,3 +128,10 @@ jobs:
           user_email: ${{ env.USER_EMAIL }}
           commit_message_prefix: "PR: "
           create_pr_if_conflict: true
+          pull_request_title: "Sync upstream changes from ${{ env.UPSTREAM_REPOSITORY }}"
+          pull_request_body: |
+            同步上游仓库变更失败，可能由于 squash merge 或其他冲突。
+            ${{
+              env.CONFLICT_FILES && format('冲突文件：{0}', env.CONFLICT_FILES) ||
+              '请检查并手动解决冲突。'
+            }}
