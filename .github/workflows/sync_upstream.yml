@@ -1,8 +1,8 @@
 name: Sync Upstream
 
 on:
-#  schedule:
-#    - cron: '0 8,16 * * *'  # 每天 UTC 8:00 和 16:00
+  schedule:
+    - cron: '0 8,16 * * *'  # 每天 UTC 8:00 和 16:00
   workflow_dispatch:
     inputs:
       target_branch:
@@ -22,8 +22,21 @@ on:
         required: false
         default: 'rebase'
 
+env:
+  SYNC_GITEE_USERNAME: ${{ secrets.CUSTOM_GITEE_USERNAME }}
+  SYNC_GITEE_TOKEN: ${{ secrets.CUSTOM_GITEE_TOKEN }}
+  SYNC_GITEE_PRIVATE_KEY: ${{ secrets.CUSTOM_GITEE_PRIVATE_KEY }}
+  SYNC_GITEE_REPO: bettergi-scripts-list
+  SYNC_GITEE_TARGET_BRANCH: ${{  secrets.GITEE_TARGET_BRANCH || 'master' }}
+  SYNC_TASK_BRANCH: ${{ secrets.SYNC_TASK_BRANCH || 'sync-task' }}
+
+  USER_NAME: ${{ github.repository_owner || github.actor }}
+  REPO_NAME: ${{ github.event.repository.name }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  TARGET_SYNC_BRANCH: ${{ github.event.inputs.target_branch || secrets.TARGET_BRANCH || 'main' }}
+
 jobs:
-  sync:
+  sync-upstream:
     if: github.repository_owner != 'babalae'
     runs-on: ubuntu-latest
     name: Sync latest commits from upstream repo
@@ -135,3 +148,72 @@ jobs:
                 env.CONFLICT_FILES && format('冲突文件：{0}', env.CONFLICT_FILES) ||
                 '请检查并手动解决冲突。'
               }}
+            
+  sync-repo:
+     needs: [ sync-upstream ]
+     runs-on: ubuntu-latest
+     name: Sync Gitee repo
+     steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+           ref: ${{ env.TARGET_SYNC_BRANCH }}
+           fetch-depth: 0
+
+#      - name: Mirror Github to Gitee
+#        uses: Yikun/hub-mirror-action@master
+#        with:
+#            # 源：github/你的用户名/仓库名
+#            src: github/${{env.USER_NAME}}/${{env.REPO_NAME}}
+#            # 目标：gitee/你的Gitee用户名/仓库名（不存在会自动创建）
+#            dst: gitee/${{env.SYNC_GITEE_USERNAME}}/${{env.SYNC_GITEE_REPO}}
+#            # Gitee SSH私钥（推送代码用）
+#            dst_key: ${{ env.SYNC_GITEE_PRIVATE_KEY }}
+#            # Gitee令牌（自动创建仓库、API权限）
+#            dst_token: ${{ env.SYNC_GITEE_TOKEN }}
+#            # 强制覆盖同步（解决冲突、强制更新）
+#            force_update: true
+#            # 同步所有分支、所有tag
+#            mirror_all_branches: true
+#            mirror_tags: true
+#            # 开启调试日志（出错可打开）
+#            debug: false
+
+#      - name: sync-gitee
+#        id: sync-gitee
+#        run: |
+#          cd $GITHUB_WORKSPACE
+#          #current_branch=$(git branch --show-current)
+#          git fetch origin
+#          git checkout "origin/${{env.SYNC_TASK_BRANCH}}" -- .github/workflows/bash/shell.sh
+#          #echo "===="
+#          URL_SOURCE="https://github.com/${{env.USER_NAME}}/${{env.REPO_NAME}}.git"
+#          BRANCH_SOURCE="${{env.TARGET_SYNC_BRANCH}}"
+#          USERNAME_SOURCE="${{env.USER_NAME}}"
+#          TOKEN_SOURCE="${{env.GITHUB_TOKEN}}"
+#          #echo "===="
+#          URL_TARGET="https://gitee.com/${{env.SYNC_GITEE_USERNAME}}/${{env.SYNC_GITEE_REPO}}.git"
+#          BRANCH_TARGET="${{env.SYNC_GITEE_TARGET_BRANCH}}"
+#          USERNAME_TARGET="${{env.SYNC_GITEE_USERNAME}}"
+#          TOKEN_TARGET="${{env.SYNC_GITEE_TOKEN}}"
+#          #echo "===="
+#          mkdir -p "$GITHUB_WORKSPACE/temp"
+#          cd "$GITHUB_WORKSPACE/temp"
+#          source $GITHUB_WORKSPACE/.github/workflows/bash/shell.sh
+#          main_sync $URL_SOURCE $BRANCH_SOURCE $USERNAME_SOURCE $TOKEN_SOURCE $URL_TARGET $BRANCH_TARGET $USERNAME_TARGET $TOKEN_TARGET
+
+      - name: Sync GitHub to Gitee
+        uses: Kirito520Asuna/repo-sync-action@main
+        with:
+          #源仓库配置
+          src: github.com/${{env.USER_NAME}}/${{env.REPO_NAME}}.git
+          src_branch: ${{env.TARGET_SYNC_BRANCH}}
+          src_username: ${{env.USER_NAME}}
+          src_token: ${{env.GITHUB_TOKEN}}
+          #目标仓库配置
+          dst: gitee.com/${{env.SYNC_GITEE_USERNAME}}/${{env.SYNC_GITEE_REPO}}.git
+          dst_branch: ${{env.SYNC_GITEE_TARGET_BRANCH}}
+          dst_username: ${{env.SYNC_GITEE_USERNAME}}
+          dst_token: ${{env.SYNC_GITEE_TOKEN}}
+          #是否强制同步
+          force_push: 'true'
