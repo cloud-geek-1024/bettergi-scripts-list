@@ -234,3 +234,7 @@ jobs:
           dst_token: ${{env.SYNC_GITEE_TOKEN}}
           #是否强制同步
           force_push: 'true'
+          git_post_buffer: 1048576000
+          git_low_speed_limit: 1000
+          git_low_speed_time: 60
+          push_timeout: 3600
