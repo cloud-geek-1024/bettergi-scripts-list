@@ -2,7 +2,7 @@ name: Sync Upstream
 
 on:
   schedule:
-    - cron: '0 8,16 * * *'  # 每天 UTC 8:00 和 16:00
+    - cron: '0 22,10 * * *'  # 每天 UTC 22:00 和 10:00 ==> CN 6:00 和 18:00
   workflow_dispatch:
     inputs:
       target_branch:
