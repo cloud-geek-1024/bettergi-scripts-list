@@ -1,8 +1,8 @@
 name: Sync Upstream
 
 on:
-#  schedule:
-#    - cron: '0 8,16 * * *'  # 每天 UTC 8:00 和 16:00
+  schedule:
+    - cron: '0 22,10 * * *'  # 每天 UTC 22:00 和 10:00 ==> CN 6:00 和 18:00
   workflow_dispatch:
     inputs:
       target_branch:
@@ -22,8 +22,21 @@ on:
         required: false
         default: 'rebase'
 
+env:
+  SYNC_GITEE_USERNAME: ${{ secrets.CUSTOM_GITEE_USERNAME }}
+  SYNC_GITEE_TOKEN: ${{ secrets.CUSTOM_GITEE_TOKEN }}
+  SYNC_GITEE_PRIVATE_KEY: ${{ secrets.CUSTOM_GITEE_PRIVATE_KEY }}
+  SYNC_GITEE_REPO: bettergi-scripts-list
+  SYNC_GITEE_TARGET_BRANCH: ${{  secrets.GITEE_TARGET_BRANCH || 'master' }}
+  SYNC_TASK_BRANCH: ${{ secrets.SYNC_TASK_BRANCH || 'sync-task' }}
+
+  USER_NAME: ${{ github.repository_owner || github.actor }}
+  REPO_NAME: ${{ github.event.repository.name }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  TARGET_SYNC_BRANCH: ${{ github.event.inputs.target_branch || secrets.TARGET_BRANCH || 'main' }}
+
 jobs:
-  sync:
+  sync-upstream:
     if: github.repository_owner != 'babalae'
     runs-on: ubuntu-latest
     name: Sync latest commits from upstream repo
@@ -35,103 +48,193 @@ jobs:
           ref: ${{ github.event.inputs.target_branch || secrets.TARGET_BRANCH || 'main' }}
           fetch-depth: 0
 
-      - name: Set input value
-        run: |
-          UPSTREAM_REPOSITORY='babalae/bettergi-scripts-list'
-          echo "UPSTREAM_REPOSITORY=$UPSTREAM_REPOSITORY" >> $GITHUB_ENV
-          
-          UPSTREAM_REPO="https://github.com/$UPSTREAM_REPOSITORY.git"
-          
-          USER_NAME='${{ github.repository_owner || github.actor }}'
-          USER_EMAIL='${{ secrets.USER_EMAIL }}'
-          USER_REPOSITORY='${{ github.repository }}'
-          
-          echo "USER_REPOSITORY=$USER_REPOSITORY" >> $GITHUB_ENV
-          echo "USER_NAME=$USER_NAME" >> $GITHUB_ENV
-          echo "USER_EMAIL=$USER_EMAIL" >> $GITHUB_ENV
-          echo "UPSTREAM_REPO=$UPSTREAM_REPO" >> $GITHUB_ENV
-          
-          TARGET_SYNC_BRANCH="${{ github.event.inputs.target_branch || secrets.TARGET_BRANCH || 'main' }}"
-          echo "TARGET_SYNC_BRANCH=$TARGET_SYNC_BRANCH" >> $GITHUB_ENV
-          ENABLE_UPSTREAM_SYNC="${{ github.event.inputs.enable_upstream_sync || secrets.ENABLE_UPSTREAM_SYNC || 'false' }}"
-          echo "ENABLE_UPSTREAM_SYNC=$ENABLE_UPSTREAM_SYNC" >> $GITHUB_ENV
-          echo "SYNC_MODE=${{ github.event.inputs.sync_mode || 'rebase' }}" >> $GITHUB_ENV
-          
-          echo "{
-            \"UPSTREAM_REPOSITORY\": \"$UPSTREAM_REPOSITORY\",
-            \"UPSTREAM_REPO\": \"$UPSTREAM_REPO\",
-            \"USER_REPOSITORY\": \"$USER_REPOSITORY\",
-            \"USER_NAME\": \"$USER_NAME\",
-            \"USER_EMAIL\": \"$USER_EMAIL\",
-            \"TARGET_SYNC_BRANCH\": \"$TARGET_SYNC_BRANCH\",
-            \"ENABLE_UPSTREAM_SYNC\": \"$ENABLE_UPSTREAM_SYNC\",
-            \"SYNC_MODE\": \"$SYNC_MODE\"
-          }" > sync_inputs.json
-          cat sync_inputs.json
-
-      - name: Check the synchronization switch
-        id: check-switch
-        run: |
-          if [ "${{ env.ENABLE_UPSTREAM_SYNC }}" != "true" ]; then
-            echo "同步功能已关闭 (ENABLE_UPSTREAM_SYNC 未设为 true)，跳过。"
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check upstream changes
-        if: steps.check-switch.outputs.skip != 'true'
-        run: |
-          git remote add upstream ${{ env.UPSTREAM_REPO }} || echo "上游远程已存在"
-          git fetch upstream --quiet || { echo "错误：无法获取上游仓库数据"; exit 1; }
-          UPSTREAM_SHA=$(git rev-parse upstream/main)
-          LOCAL_SHA=$(git rev-parse HEAD)
-          if [ "$UPSTREAM_SHA" = "$LOCAL_SHA" ]; then
-            echo "上游无新变更，跳过同步。"
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "上游有新变更，继续同步。"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          fi
-        id: check-changes
-
-      - name: Rebase if selected
-        if: steps.check-switch.outputs.skip != 'true' && steps.check-changes.outputs.has_changes == 'true' && env.sync_mode == 'rebase' && env.USER_REPOSITORY != env.UPSTREAM_REPOSITORY
-        run: |
-          git rebase upstream/main
-          if [ $? -ne 0 ]; then
-            echo "Rebase 失败，可能有冲突，将创建 PR 解决。"
-            CONFLICT_FILES=$(git diff --name-only --diff-filter=U || echo "无法获取冲突文件")
-            echo "冲突文件: $CONFLICT_FILES"
-            echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
-            git rebase --abort
-            echo "rebase_failed=true" >> $GITHUB_OUTPUT
-          else
-            git push --force-with-lease
-            echo "rebase_failed=false" >> $GITHUB_OUTPUT
-          fi
-        id: rebase
-
-      - name: Sync upstream changes
-        if: steps.check-switch.outputs.skip != 'true' && steps.check-changes.outputs.has_changes == 'true' && (env.sync_mode != 'rebase' || steps.rebase.outputs.rebase_failed == 'true') && env.USER_REPOSITORY != env.UPSTREAM_REPOSITORY
-        id: sync
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+      - name: Sync Upstream
+        uses: Kirito520Asuna/repo-sync-action@main
         with:
-          target_sync_branch: ${{ env.TARGET_SYNC_BRANCH }}
-          upstream_sync_branch: main
-          upstream_sync_repo: ${{ env.UPSTREAM_REPOSITORY }}
-          upstream_branch: main
-          sync_test_mode: false
-          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
-          force: ${{ github.event.inputs.preserve_ahead == 'false' }}
-          user_name: ${{ env.USER_NAME }}
-          user_email: ${{ env.USER_EMAIL }}
-          commit_message_prefix: "PR: "
-          create_pr_if_conflict: true
-          pull_request_title: "Sync upstream changes from ${{ env.UPSTREAM_REPOSITORY }}"
-          pull_request_body: |
-              同步上游仓库变更失败，可能由于 squash merge 或其他冲突。
-              ${{
-                env.CONFLICT_FILES && format('冲突文件：{0}', env.CONFLICT_FILES) ||
-                '请检查并手动解决冲突。'
-              }}
+          #源仓库配置
+          src: github.com/babalae/bettergi-scripts-list.git
+          src_branch: ${{env.TARGET_SYNC_BRANCH}}
+          src_username: ${{env.USER_NAME}}
+          #src_token: ${{env.GITHUB_TOKEN}}
+          #目标仓库配置
+          dst: github.com/${{github.repository_owner}}/${{github.event.repository.name}}.git
+          dst_branch: ${{env.TARGET_SYNC_BRANCH}}
+          dst_username: ${{github.repository_owne}}
+          dst_token: ${{env.GITHUB_TOKEN}}
+          #是否强制同步
+          #force_push: 'true'
+
+
+#      - name: Set input value
+#        run: |
+#          UPSTREAM_REPOSITORY='babalae/bettergi-scripts-list'
+#          echo "UPSTREAM_REPOSITORY=$UPSTREAM_REPOSITORY" >> $GITHUB_ENV
+#
+#          UPSTREAM_REPO="https://github.com/$UPSTREAM_REPOSITORY.git"
+#
+#          USER_NAME='${{ github.repository_owner || github.actor }}'
+#          USER_EMAIL='${{ secrets.USER_EMAIL }}'
+#          USER_REPOSITORY='${{ github.repository }}'
+#
+#          echo "USER_REPOSITORY=$USER_REPOSITORY" >> $GITHUB_ENV
+#          echo "USER_NAME=$USER_NAME" >> $GITHUB_ENV
+#          echo "USER_EMAIL=$USER_EMAIL" >> $GITHUB_ENV
+#          echo "UPSTREAM_REPO=$UPSTREAM_REPO" >> $GITHUB_ENV
+#
+#          TARGET_SYNC_BRANCH="${{ github.event.inputs.target_branch || secrets.TARGET_BRANCH || 'main' }}"
+#          echo "TARGET_SYNC_BRANCH=$TARGET_SYNC_BRANCH" >> $GITHUB_ENV
+#          ENABLE_UPSTREAM_SYNC="${{ github.event.inputs.enable_upstream_sync || secrets.ENABLE_UPSTREAM_SYNC || 'false' }}"
+#          echo "ENABLE_UPSTREAM_SYNC=$ENABLE_UPSTREAM_SYNC" >> $GITHUB_ENV
+#          echo "SYNC_MODE=${{ github.event.inputs.sync_mode || 'rebase' }}" >> $GITHUB_ENV
+#
+#          echo "{
+#            \"UPSTREAM_REPOSITORY\": \"$UPSTREAM_REPOSITORY\",
+#            \"UPSTREAM_REPO\": \"$UPSTREAM_REPO\",
+#            \"USER_REPOSITORY\": \"$USER_REPOSITORY\",
+#            \"USER_NAME\": \"$USER_NAME\",
+#            \"USER_EMAIL\": \"$USER_EMAIL\",
+#            \"TARGET_SYNC_BRANCH\": \"$TARGET_SYNC_BRANCH\",
+#            \"ENABLE_UPSTREAM_SYNC\": \"$ENABLE_UPSTREAM_SYNC\",
+#            \"SYNC_MODE\": \"$SYNC_MODE\"
+#          }" > sync_inputs.json
+#          cat sync_inputs.json
+#
+#      - name: Check the synchronization switch
+#        id: check-switch
+#        run: |
+#          if [ "${{ env.ENABLE_UPSTREAM_SYNC }}" != "true" ]; then
+#            echo "同步功能已关闭 (ENABLE_UPSTREAM_SYNC 未设为 true)，跳过。"
+#            echo "skip=true" >> $GITHUB_OUTPUT
+#          else
+#            echo "skip=false" >> $GITHUB_OUTPUT
+#          fi
+#
+#      - name: Check upstream changes
+#        if: steps.check-switch.outputs.skip != 'true'
+#        run: |
+#          git remote add upstream ${{ env.UPSTREAM_REPO }} || echo "上游远程已存在"
+#          git fetch upstream --quiet || { echo "错误：无法获取上游仓库数据"; exit 1; }
+#          UPSTREAM_SHA=$(git rev-parse upstream/main)
+#          LOCAL_SHA=$(git rev-parse HEAD)
+#          if [ "$UPSTREAM_SHA" = "$LOCAL_SHA" ]; then
+#            echo "上游无新变更，跳过同步。"
+#            echo "has_changes=false" >> $GITHUB_OUTPUT
+#          else
+#            echo "上游有新变更，继续同步。"
+#            echo "has_changes=true" >> $GITHUB_OUTPUT
+#          fi
+#        id: check-changes
+#
+#      - name: Rebase if selected
+#        if: steps.check-switch.outputs.skip != 'true' && steps.check-changes.outputs.has_changes == 'true' && env.sync_mode == 'rebase' && env.USER_REPOSITORY != env.UPSTREAM_REPOSITORY
+#        run: |
+#          git rebase upstream/main
+#          if [ $? -ne 0 ]; then
+#            echo "Rebase 失败，可能有冲突，将创建 PR 解决。"
+#            CONFLICT_FILES=$(git diff --name-only --diff-filter=U || echo "无法获取冲突文件")
+#            echo "冲突文件: $CONFLICT_FILES"
+#            echo "CONFLICT_FILES=$CONFLICT_FILES" >> $GITHUB_ENV
+#            git rebase --abort
+#            echo "rebase_failed=true" >> $GITHUB_OUTPUT
+#          else
+#            git push --force-with-lease
+#            echo "rebase_failed=false" >> $GITHUB_OUTPUT
+#          fi
+#        id: rebase
+#
+#      - name: Sync upstream changes
+#        if: steps.check-switch.outputs.skip != 'true' && steps.check-changes.outputs.has_changes == 'true' && (env.sync_mode != 'rebase' || steps.rebase.outputs.rebase_failed == 'true') && env.USER_REPOSITORY != env.UPSTREAM_REPOSITORY
+#        id: sync
+#        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+#        with:
+#          target_sync_branch: ${{ env.TARGET_SYNC_BRANCH }}
+#          upstream_sync_branch: main
+#          upstream_sync_repo: ${{ env.UPSTREAM_REPOSITORY }}
+#          upstream_branch: main
+#          sync_test_mode: false
+#          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+#          force: ${{ github.event.inputs.preserve_ahead == 'false' }}
+#          user_name: ${{ env.USER_NAME }}
+#          user_email: ${{ env.USER_EMAIL }}
+#          commit_message_prefix: "PR: "
+#          create_pr_if_conflict: true
+#          pull_request_title: "Sync upstream changes from ${{ env.UPSTREAM_REPOSITORY }}"
+#          pull_request_body: |
+#              同步上游仓库变更失败，可能由于 squash merge 或其他冲突。
+#              ${{
+#                env.CONFLICT_FILES && format('冲突文件：{0}', env.CONFLICT_FILES) ||
+#                '请检查并手动解决冲突。'
+#              }}
+#
+  sync-repo:
+     needs: [ sync-upstream ]
+     runs-on: ubuntu-latest
+     name: Sync Gitee repo
+     steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+           ref: ${{ env.TARGET_SYNC_BRANCH }}
+           fetch-depth: 0
+
+#      - name: Mirror Github to Gitee
+#        uses: Yikun/hub-mirror-action@master
+#        with:
+#            # 源：github/你的用户名/仓库名
+#            src: github/${{env.USER_NAME}}/${{env.REPO_NAME}}
+#            # 目标：gitee/你的Gitee用户名/仓库名（不存在会自动创建）
+#            dst: gitee/${{env.SYNC_GITEE_USERNAME}}/${{env.SYNC_GITEE_REPO}}
+#            # Gitee SSH私钥（推送代码用）
+#            dst_key: ${{ env.SYNC_GITEE_PRIVATE_KEY }}
+#            # Gitee令牌（自动创建仓库、API权限）
+#            dst_token: ${{ env.SYNC_GITEE_TOKEN }}
+#            # 强制覆盖同步（解决冲突、强制更新）
+#            force_update: true
+#            # 同步所有分支、所有tag
+#            mirror_all_branches: true
+#            mirror_tags: true
+#            # 开启调试日志（出错可打开）
+#            debug: false
+
+#      - name: sync-gitee
+#        id: sync-gitee
+#        run: |
+#          cd $GITHUB_WORKSPACE
+#          #current_branch=$(git branch --show-current)
+#          git fetch origin
+#          git checkout "origin/${{env.SYNC_TASK_BRANCH}}" -- .github/workflows/bash/shell.sh
+#          #echo "===="
+#          URL_SOURCE="https://github.com/${{env.USER_NAME}}/${{env.REPO_NAME}}.git"
+#          BRANCH_SOURCE="${{env.TARGET_SYNC_BRANCH}}"
+#          USERNAME_SOURCE="${{env.USER_NAME}}"
+#          TOKEN_SOURCE="${{env.GITHUB_TOKEN}}"
+#          #echo "===="
+#          URL_TARGET="https://gitee.com/${{env.SYNC_GITEE_USERNAME}}/${{env.SYNC_GITEE_REPO}}.git"
+#          BRANCH_TARGET="${{env.SYNC_GITEE_TARGET_BRANCH}}"
+#          USERNAME_TARGET="${{env.SYNC_GITEE_USERNAME}}"
+#          TOKEN_TARGET="${{env.SYNC_GITEE_TOKEN}}"
+#          #echo "===="
+#          mkdir -p "$GITHUB_WORKSPACE/temp"
+#          cd "$GITHUB_WORKSPACE/temp"
+#          source $GITHUB_WORKSPACE/.github/workflows/bash/shell.sh
+#          main_sync $URL_SOURCE $BRANCH_SOURCE $USERNAME_SOURCE $TOKEN_SOURCE $URL_TARGET $BRANCH_TARGET $USERNAME_TARGET $TOKEN_TARGET
+
+      - name: Sync GitHub to Gitee
+        uses: Kirito520Asuna/repo-sync-action@main
+        with:
+          #源仓库配置
+          src: github.com/${{env.USER_NAME}}/${{env.REPO_NAME}}.git
+          src_branch: ${{env.TARGET_SYNC_BRANCH}}
+          src_username: ${{env.USER_NAME}}
+          src_token: ${{env.GITHUB_TOKEN}}
+          #目标仓库配置
+          dst: gitee.com/${{env.SYNC_GITEE_USERNAME}}/${{env.SYNC_GITEE_REPO}}.git
+          dst_branch: ${{env.SYNC_GITEE_TARGET_BRANCH}}
+          dst_username: ${{env.SYNC_GITEE_USERNAME}}
+          dst_token: ${{env.SYNC_GITEE_TOKEN}}
+          #是否强制同步
+          force_push: 'true'
+          git_post_buffer: 1048576000
+          git_low_speed_limit: 1000
+          git_low_speed_time: 60
+          push_timeout: 3600
